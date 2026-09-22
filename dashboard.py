@@ -75,8 +75,10 @@ st.markdown(
 
 
 def initialize_session_state():
-    """Inicializa as instâncias duradouras de estado no Streamlit."""
-    if "tracker" not in st.session_state:
+    """Inicializa as instâncias duradouras de estado no Streamlit com autocura de cache."""
+    current_q_ids = set(get_question_ids())
+    tracker = st.session_state.get("tracker")
+    if tracker is None or set(getattr(tracker, "question_ids", [])) != current_q_ids:
         st.session_state.tracker = HistoryTracker(
             maxlen=settings.HISTORY_MAX_POINTS, alpha=settings.EMA_ALPHA
         )
@@ -364,7 +366,12 @@ if p_buy >= 0.60 or p_ret >= 0.60 or p_sat >= 0.60:
 
 def create_time_series_figure(qid: str, df: pd.DataFrame) -> go.Figure:
     """Gera o gráfico Plotly escuro e executivo para a probabilidade especificada."""
-    q_meta = JEV_QUESTIONS[qid]
+    q_meta = JEV_QUESTIONS.get(qid, {
+        "display_name": qid,
+        "color": "#94A3B8",
+        "threshold": 0.70,
+        "alert_text": "",
+    })
     fig = go.Figure()
 
     if not df.empty and len(df) > 0:
@@ -512,7 +519,9 @@ with tab_series:
     kpi_cols = st.columns(len(q_ids))
 
     for idx, qid in enumerate(q_ids):
-        q_meta = JEV_QUESTIONS[qid]
+        q_meta = JEV_QUESTIONS.get(qid)
+        if not q_meta:
+            continue
         val_data = latest_values.get(qid, {"filtered": 0.0, "raw": 0.0, "delta": 0.0})
         val_pct = val_data["filtered"] * 100.0
         delta_pct = val_data["delta"] * 100.0
@@ -581,9 +590,12 @@ with tab_series:
     # Alertas Ativos no Rodapé
     active_alerts = []
     for qid in get_question_ids():
+        q_meta = JEV_QUESTIONS.get(qid)
+        if not q_meta:
+            continue
         val = latest_values.get(qid, {}).get("filtered", 0.0)
-        if val >= JEV_QUESTIONS[qid]["threshold"]:
-            active_alerts.append(f"**{JEV_QUESTIONS[qid]['display_name']}**: {JEV_QUESTIONS[qid]['alert_text']}")
+        if val >= q_meta["threshold"]:
+            active_alerts.append(f"**{q_meta['display_name']}**: {q_meta['alert_text']}")
 
     if active_alerts:
         st.error("🚨 **AÇÕES RECOMENDADAS PELO SISTEMA:**\n\n" + "\n\n".join(active_alerts))

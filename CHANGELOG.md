@@ -69,3 +69,4 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Corrigido (Fixed)
 - Corrigido `AttributeError: 'HistoryTracker' object has no attribute '_last_filtered'` em `history_tracker.py` decorrente da omissão do dicionário de estado de filtro após inclusão dos atributos de QEI.
 - Implementado mecanismo de autocura e compatibilidade defensiva em `HistoryTracker.add_point()` e `dashboard.py:initialize_session_state()` para restaurar atributos ausentes em instâncias pré-existentes no cache do navegador sem necessidade de reiniciar a sessão do usuário.
+- Corrigido `KeyError: 'p_stand_retention_engagement'` ao alternar abas no [dashboard.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/dashboard.py), implementando validação ativa de discrepância de schema no cache de sessão do Streamlit e acesso defensivo com `.get()` ao dicionário de perguntas.
