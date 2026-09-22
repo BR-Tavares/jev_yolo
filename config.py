@@ -35,10 +35,9 @@ class Settings:
 
     # Parâmetros de Geometria e Calibração Padrão (Estande da Feira)
     BOOTH_NOMINAL_CAPACITY: int = 15
-    BOOTH_DISPLAY_POS_M: tuple[float, float] = (0.0, 2.5)  # Posição do totem [X, Y] em metros
-    SALES_REP_DEFAULT_POS_M: tuple[float, float] = (2.5, 1.0)  # Posição do promotor
-    ENGAGEMENT_DISTANCE_THRESHOLD_M: float = 1.8  # Limite para considerar engajamento (m)
-    ENGAGEMENT_VELOCITY_THRESHOLD_MPS: float = 0.3  # Velocidade máxima para engajamento (m/s)
+    BOOTH_DISPLAY_POS_M: tuple[float, float] = (0.0, 4.2)  # Posição da bancada do notebook no interior do estande
+    ENGAGEMENT_DISTANCE_THRESHOLD_M: float = 1.8  # Limite para considerar engajamento em frente à bancada (m)
+    ENGAGEMENT_VELOCITY_THRESHOLD_MPS: float = 0.35  # Velocidade máxima para engajamento (m/s)
 
     @classmethod
     def is_api_key_configured(cls) -> bool:

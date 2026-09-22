@@ -29,6 +29,10 @@ class Detection(BaseModel):
         default=0.0,
         description="Ângulo de rotação da cabeça em graus (0° = olhando direto para o estande; >45° = olhando para o corredor)",
     )
+    speed_mps: Optional[float] = Field(
+        default=None,
+        description="Velocidade cinemática vetorial estimada em m/s",
+    )
 
 
 class YoloFrame(BaseModel):
@@ -62,13 +66,13 @@ class YoloScenarioSimulator:
         detections: List[Detection] = []
 
         # ----------------------------------------------------------------------
-        # 1. População de Fundo do Corredor da Feira (14 a 18 Pedestres em Trânsito)
+        # 1. População de Fundo do Corredor da Feira (14 Pedestres em Trânsito Livre)
+        # Faixa do corredor público: Y entre 590 e 660 px (Solo Y entre 0.8m e 1.3m)
         # Fluxo contínuo bidirecional: pessoas andando pela passarela pública da feira
         # ----------------------------------------------------------------------
         corridor_crowd_size = 14
         for i in range(corridor_crowd_size):
             p_id = 50 + i
-            # Direção de caminhada: pares vão para a direita (+X), ímpares para a esquerda (-X)
             direction = 1 if (i % 2 == 0) else -1
             base_speed = 18.0 + (i % 5) * 3.5  # pixels por frame
             
@@ -76,10 +80,11 @@ class YoloScenarioSimulator:
             cycle_width = 1100
             x_raw = (i * 75 + step * base_speed * direction) % cycle_width
             x_pos = int(50 + x_raw)
-            # Faixa de profundidade do corredor (Y entre 460 e 540 px)
-            y_pos = int(470 + (i % 4) * 20 + math.sin(step * 0.1 + i) * 5)
+            # Faixa de profundidade do corredor (Y entre 595 e 655 px -> Solo 0.8m a 1.25m)
+            y_pos = int(600 + (i % 4) * 16 + math.sin(step * 0.1 + i) * 4)
             
             yaw_dir = 82.0 if direction > 0 else -82.0
+            corridor_speed = 1.15 + (i % 5) * 0.05
 
             detections.append(
                 Detection(
@@ -89,24 +94,27 @@ class YoloScenarioSimulator:
                     center_foot_px=[x_pos, y_pos],
                     head_bbox_xyxy=[x_pos - 18, y_pos - 280, x_pos + 18, y_pos - 225],
                     head_yaw_deg=yaw_dir,
+                    speed_mps=corridor_speed,
                 )
             )
 
         # ----------------------------------------------------------------------
-        # 2. Interações Específicas do Estande (Sem Vendedor - Foco no Visitante)
+        # 2. Interações Específicas do Estande (Interior do Estande: Y <= 500 px)
+        # A bancada de demonstração fica em Y=4.2m (px Y ~ 395).
+        # Os visitantes que testam o notebook ficam em frente à bancada em Y ~ 3.4m (px Y ~ 427).
         # ----------------------------------------------------------------------
         if scenario == "passante_rapido":
-            # Apenas o trânsito normal e fluido do corredor, ninguém parando na fachada
+            # Apenas o trânsito normal e fluido do corredor, ninguém parando no estande
             pass
 
         elif scenario == "lead_quente_curioso":
-            # Visitante que rompeu o fluxo do corredor e parou no totem interativo
+            # Visitante que rompeu o fluxo do corredor e parou em frente à bancada no estande
             noise_x = int(math.sin(step * 0.3) * 3)
             noise_y = int(math.cos(step * 0.2) * 2)
-            base_x = 520 + noise_x
-            base_y = 660 + noise_y
+            base_x = 640 + noise_x
+            base_y = 427 + noise_y  # Solo: (0.0m, 3.4m) em frente à bancada
 
-            # Cabeça e corpo diretamente alinhados com o totem (yaw ~ 4° - foco na tela)
+            # Cabeça e corpo diretamente alinhados com o notebook (yaw ~ 2° - foco na tela)
             detections.append(
                 Detection(
                     track_id=205,
@@ -114,18 +122,19 @@ class YoloScenarioSimulator:
                     bbox_xyxy=[base_x - 55, base_y - 390, base_x + 55, base_y],
                     center_foot_px=[base_x, base_y],
                     head_bbox_xyxy=[base_x - 22, base_y - 390, base_x + 22, base_y - 320],
-                    head_yaw_deg=4.0,  # Olhar direto para a demonstração
+                    head_yaw_deg=2.0,  # Olhar direto para a demonstração
+                    speed_mps=0.04,
                 )
             )
 
         elif scenario == "aglomeracao_demo_pico":
-            # Grupo de 5 visitantes em leque retidos simultaneamente em frente à tela
+            # Grupo de 5 visitantes reunidos ao redor da bancada de demonstração
             anchor_points = [
-                (450, 640, -12.0),
-                (520, 670, 2.0),
-                (590, 650, 14.0),
-                (400, 610, -22.0),
-                (640, 620, 20.0),
+                (600, 422, 6.0),
+                (640, 432, 0.0),
+                (680, 424, -8.0),
+                (555, 438, 18.0),
+                (725, 432, -16.0),
             ]
             for idx, (px, py, yaw) in enumerate(anchor_points):
                 jitter_x = int(math.sin(step * 0.2 + idx) * 3)
@@ -140,14 +149,15 @@ class YoloScenarioSimulator:
                         center_foot_px=[x, y],
                         head_bbox_xyxy=[x - 20, y - 360, x + 20, y - 295],
                         head_yaw_deg=yaw,
+                        speed_mps=0.08,
                     )
                 )
 
         elif scenario == "risco_respiratorio_elevado":
-            # Aglomeração pesada e estagnada de público
+            # Aglomeração de 8 pessoas estáticas no interior do estande
             base_cluster = [
-                (480, 630), (510, 645), (460, 660), (535, 620),
-                (550, 670), (430, 635), (500, 690), (470, 600),
+                (610, 425), (645, 435), (680, 430), (590, 450),
+                (665, 450), (550, 440), (710, 440), (630, 465),
             ]
             for idx, (px, py) in enumerate(base_cluster):
                 jitter_x = int(math.sin(step * 0.1 + idx) * 2)
@@ -162,6 +172,7 @@ class YoloScenarioSimulator:
                         center_foot_px=[x, y],
                         head_bbox_xyxy=[x - 18, y - 340, x + 18, y - 280],
                         head_yaw_deg=random.uniform(-30.0, 30.0),
+                        speed_mps=0.05,
                     )
                 )
 

@@ -14,11 +14,11 @@ from yolo_stream import YoloFrame, Detection
 
 class TrackHistory:
     """Mantém o histórico cinético e temporal de um indivíduo rastreado."""
-    def __init__(self, track_id: int, initial_pos_m: Tuple[float, float], timestamp_s: float):
+    def __init__(self, track_id: int, initial_pos_m: Tuple[float, float], timestamp_s: float, initial_velocity: float = 1.2):
         self.track_id = track_id
         self.last_pos_m = initial_pos_m
         self.last_timestamp_s = timestamp_s
-        self.velocity_mps = 0.0
+        self.velocity_mps = initial_velocity
         self.dwell_time_s = 0.0
         self.is_engaged = False
 
@@ -124,15 +124,22 @@ class SitrepEngine:
                 booth_count += 1
 
             # Atualização do rastreamento cinético
+            default_init_v = 1.25 if pos_m[1] < 2.0 else 0.05
             if track_id not in self.tracks:
-                self.tracks[track_id] = TrackHistory(track_id, pos_m, now_s)
+                self.tracks[track_id] = TrackHistory(track_id, pos_m, now_s, initial_velocity=default_init_v)
 
             tracker = self.tracks[track_id]
             dx = pos_m[0] - tracker.last_pos_m[0]
             dy = pos_m[1] - tracker.last_pos_m[1]
             dist_moved = math.sqrt(dx * dx + dy * dy)
-            current_velocity = dist_moved / dt
-            tracker.velocity_mps = 0.6 * tracker.velocity_mps + 0.4 * current_velocity
+
+            # Se a detecção possui speed_mps explícito (YOLO-Pose / Tracker cinético), respeita fielmente
+            if hasattr(det, "speed_mps") and det.speed_mps is not None:
+                tracker.velocity_mps = det.speed_mps
+            else:
+                current_velocity = dist_moved / dt
+                tracker.velocity_mps = 0.6 * tracker.velocity_mps + 0.4 * current_velocity
+
             tracker.last_pos_m = pos_m
             velocities.append(tracker.velocity_mps)
 

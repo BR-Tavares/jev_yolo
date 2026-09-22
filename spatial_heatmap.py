@@ -74,12 +74,18 @@ class SpatialHeatmapEngine:
             gy = int(py / self.resolution_m)
 
             if 0 <= gx < self.nx and 0 <= gy < self.ny:
-                if vel < settings.ENGAGEMENT_VELOCITY_THRESHOLD_MPS:
-                    weight = (1.5 + min(dwell, 40.0) * 0.15) * dt
-                elif vel < 0.8:
-                    weight = 0.6 * dt
+                # Se estiver no corredor público (py < 2.0m) e em trânsito, quase não dissipa calor
+                if py < 2.0:
+                    if vel < 0.6:
+                        weight = 0.3 * dt  # Transeunte reduzindo o passo para olhar
+                    else:
+                        weight = 0.02 * dt  # Passante fluido não gera calor de retenção
                 else:
-                    weight = 0.15 * dt
+                    # No interior do estande: aquecimento forte proporcional ao dwell time na bancada
+                    if dwell >= 1.0 or vel < settings.ENGAGEMENT_VELOCITY_THRESHOLD_MPS:
+                        weight = (2.0 + min(dwell, 40.0) * 0.25) * dt
+                    else:
+                        weight = 0.4 * dt
 
                 self.heatmap_matrix[gy, gx] += weight
 
@@ -93,111 +99,132 @@ class SpatialHeatmapEngine:
 
     def create_floorplan_figure(self) -> go.Figure:
         """
-        Gera a visualização arquitetural 2D Top-Down do Estande e Corredor
-        com a sobreposição do Mapa de Calor e Pedestres em tempo real.
+        Renderiza a planta baixa arquitetural 2D do estande sobreposta com o mapa térmico de solo.
         """
-        smoothed = self.get_smoothed_heatmap()
         fig = go.Figure()
-
         half_w = self.width_m / 2.0
 
-        max_val = float(np.max(smoothed))
-        if max_val > 0.05:
-            fig.add_trace(
-                go.Heatmap(
-                    z=smoothed,
-                    x=self.x_coords,
-                    y=self.y_coords,
-                    colorscale="Hot",
-                    reversescale=True,
-                    opacity=0.65,
-                    zmin=0.0,
-                    zmax=max(5.0, max_val),
-                    showscale=True,
-                    colorbar=dict(
-                        title=dict(text="Retenção (Dwell)", font=dict(color="#F8FAFC", size=11)),
-                        tickfont=dict(color="#94A3B8", size=10),
-                        len=0.7,
-                        thickness=14,
-                        x=1.02,
-                    ),
-                    hoverinfo="none",
-                )
-            )
+        # 1. Mapa de Calor (Gradiente Térmico Contínuo)
+        smooth_heat = self.get_smoothed_heatmap()
+        x_coords = np.linspace(-half_w, half_w, self.nx)
+        y_coords = np.linspace(0.0, self.depth_m, self.ny)
 
-        # Linha limite da fachada
+        fig.add_trace(
+            go.Heatmap(
+                x=x_coords,
+                y=y_coords,
+                z=smooth_heat,
+                colorscale="Hot",
+                reversescale=True,
+                zmin=0.0,
+                zmax=max(5.0, float(np.max(smooth_heat))),
+                opacity=0.68,
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text="Retenção (Dwell)", font=dict(color="#F8FAFC", size=11)),
+                    tickfont=dict(color="#94A3B8"),
+                    len=0.75,
+                ),
+                hoverinfo="none",
+            )
+        )
+
+        # 2. Desenho Arquitetural do Estande e Corredor
+        # Perímetro do estande (2m a 6.2m)
+        fig.add_shape(
+            type="rect",
+            x0=-half_w, y0=2.0, x1=half_w, y1=self.depth_m,
+            line=dict(color="#475569", width=2),
+            fillcolor="rgba(241, 245, 249, 0.06)",
+        )
+
+        # Linha da Fachada / Entrada do Estande (aberta em Y=2.0m)
         fig.add_shape(
             type="line",
             x0=-half_w, y0=2.0, x1=half_w, y1=2.0,
-            line=dict(color="#64748B", width=2, dash="dash"),
+            line=dict(color="#94A3B8", width=2.5, dash="dash"),
         )
 
-        # Corredor público
+        # Corredor público da feira (0m a 2m)
         fig.add_shape(
             type="rect",
             x0=-half_w, y0=0.0, x1=half_w, y1=2.0,
-            fillcolor="rgba(30, 41, 59, 0.25)",
+            fillcolor="rgba(30, 41, 59, 0.35)",
             line=dict(width=0),
             layer="below",
         )
 
-        # Totem notebook
-        totem_x, totem_y = settings.BOOTH_DISPLAY_POS_M
+        # Bancada de Demonstração com Notebook no Interior do Estande (Y=4.2m)
+        bancada_x, bancada_y = settings.BOOTH_DISPLAY_POS_M
+        bancada_w = 2.2
+        bancada_d = 0.9
         fig.add_shape(
             type="rect",
-            x0=totem_x - 0.7, y0=totem_y - 0.35,
-            x1=totem_x + 0.7, y1=totem_y + 0.35,
-            fillcolor="#1E3A8A",
-            line=dict(color="#3B82F6", width=2),
+            x0=bancada_x - bancada_w / 2, y0=bancada_y - bancada_d / 2,
+            x1=bancada_x + bancada_w / 2, y1=bancada_y + bancada_d / 2,
+            fillcolor="#1E293B",
+            line=dict(color="#38BDF8", width=2.5),
         )
 
         fig.add_annotation(
-            x=0.0, y=0.4,
+            x=0.0, y=0.5,
             text="🚶 FLUXO PÚBLICO DO CORREDOR DA FEIRA",
             showarrow=False,
             font=dict(size=11, color="#64748B"),
         )
         fig.add_annotation(
-            x=-half_w + 1.2, y=2.2,
-            text="FACHADA / ENTRADA",
+            x=-half_w + 1.4, y=2.25,
+            text="🚪 ENTRADA LIVRE DO ESTANDE",
             showarrow=False,
             font=dict(size=10, color="#94A3B8"),
         )
         fig.add_annotation(
-            x=totem_x, y=totem_y,
-            text="🖥️ TOTEM NOTEBOOK",
+            x=bancada_x, y=bancada_y,
+            text="💻 BANCADA DE DEMONSTRAÇÃO (NOTEBOOK)",
             showarrow=False,
-            font=dict(size=11, color="#93C5FD"),
+            font=dict(size=11, color="#38BDF8"),
         )
         fig.add_annotation(
-            x=0.0, y=4.5,
+            x=0.0, y=5.6,
             text="ÁREA INTERNA DO ESTANDE",
             showarrow=False,
             font=dict(size=11, color="#475569"),
         )
 
+        # 3. Pedestres com Classificação Semântica Estrita por Zona
         for ped in self.recent_positions:
             pos = ped.get("pos_m", (0.0, 0.0))
             px, py = pos[0], pos[1]
-            vel = ped.get("velocity_mps", 1.0)
+            vel = ped.get("velocity_mps", 1.2)
             dwell = ped.get("dwell_s", 0.0)
             yaw = ped.get("yaw_deg", 0.0)
 
-            if vel < settings.ENGAGEMENT_VELOCITY_THRESHOLD_MPS:
-                p_color = "#EF4444"  # Vermelho (Parado no Mostruário)
-                p_symbol = "circle"
-                p_size = 15
-                label = f"Lead Retido: {dwell:.0f}s"
-            elif vel < 0.8:
-                p_color = "#F59E0B"  # Amarelo (Curioso / Desacelerando)
-                p_symbol = "circle"
-                p_size = 13
-                label = f"Curioso ({vel:.1f} m/s)"
+            # Classificação semântica:
+            if py < 2.0:
+                # CORREDOR: Transeuntes públicos da feira
+                # NUNCA podem ser vermelhos ou rotulados como "Lead Retido"!
+                if vel < 0.6:
+                    p_color = "#F59E0B"  # Amarelo (Curioso desacelerando)
+                    p_symbol = "circle"
+                    p_size = 12
+                    label = f"Curioso ({vel:.1f} m/s)"
+                else:
+                    p_color = "#10B981"  # Verde (Passante em trânsito)
+                    p_symbol = "circle"
+                    p_size = 11
+                    label = f"Passante ({vel:.1f} m/s)"
             else:
-                p_color = "#10B981"  # Verde (Passante do Corredor)
-                p_symbol = "circle"
-                p_size = 11
-                label = f"Passante ({vel:.1f} m/s)"
+                # DENTRO DO ESTANDE:
+                if dwell >= 1.0 or vel < settings.ENGAGEMENT_VELOCITY_THRESHOLD_MPS:
+                    p_color = "#EF4444"  # Vermelho (Lead Retido na Bancada do Notebook)
+                    p_symbol = "circle"
+                    p_size = 16
+                    label = f"Lead Retido: {dwell:.0f}s"
+                else:
+                    p_color = "#3B82F6"  # Azul (Visitante circulando pelo estande)
+                    p_symbol = "circle"
+                    p_size = 13
+                    label = f"Visitante ({vel:.1f} m/s)"
 
             fig.add_trace(
                 go.Scatter(

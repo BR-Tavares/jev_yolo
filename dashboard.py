@@ -105,10 +105,19 @@ def initialize_session_state():
         st.session_state.step_count = 0
     if "auto_running" not in st.session_state:
         st.session_state.auto_running = False
-    if "last_sitrep" not in st.session_state:
-        st.session_state.last_sitrep = {}
     if "trigger_step" not in st.session_state:
         st.session_state.trigger_step = False
+
+    # Pré-carrega o primeiro frame na inicialização para a planta baixa já nascer populada
+    if "initialized_frame" not in st.session_state:
+        st.session_state.initialized_frame = True
+        f = st.session_state.simulator.generate_frame("lead_quente_curioso", step=1)
+        nb_f = st.session_state.nb_simulator.generate_perception("visitante_encantado", step=1)
+        st.session_state.last_sitrep = st.session_state.engine.process_frame(f, notebook_perception=nb_f)
+        st.session_state.heatmap_engine.update(
+            getattr(st.session_state.engine, "last_pedestrians_spatial_state", []),
+            dt=0.1,
+        )
 
 
 initialize_session_state()

@@ -60,6 +60,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Simulação de multidão realista de feira de tecnologia em [yolo_stream.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/yolo_stream.py), com fluxo contínuo de 14 a 18 pedestres bidirecionais no corredor e visitantes retidos no estande.
   - Implementação de métricas auditadas de público em [sitrep_engine.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/sitrep_engine.py): `corridor_passersby_count` e `booth_visitors_retained_count`.
   - Reorientação dos alertas do [dashboard.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/dashboard.py) para auditoria executiva de evento (*"ALTO ENGAJAMENTO AUDITADO NO ESTANDE"*).
+- **Layout Arquitetural Realista do Estande e Calibração Espacial da Planta Baixa**:
+  - Deslocamento da **Bancada de Demonstração (Mesa com Notebook)** para o interior do estande ($y = 4.2\text{ m}$), liberando totalmente a entrada ($y = 2.0\text{ m}$) e a circulação do corredor.
+  - Calibração de coordenadas de solo e cinemática em [yolo_stream.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/yolo_stream.py): passantes no corredor público ($y \in [0.8\text{ m}, 1.3\text{ m}]$) com velocidades autênticas de caminhada ($1.15$ a $1.35\text{ m/s}$) e visitantes em frente à bancada ($y \approx 3.4\text{ m}$).
+  - Classificação semântica estrita de cores na planta baixa em [spatial_heatmap.py](file:///c:/Users/andre/Documents/Sistemas/Jev_yolo/spatial_heatmap.py): transeuntes no corredor são sempre verdes (`Passante`) ou amarelos (`Curioso`), ficando a cor vermelha (`Lead Retido`) restrita a visitantes retidos na bancada no interior do estande.
+  - Acúmulo de calor térmico direcionado exclusivamente a retenção real dentro do estande.
 
 ### Removido (Removed)
 - **Eliminação Completa da Suposição de Vendedor / Promotor Comercial**:
